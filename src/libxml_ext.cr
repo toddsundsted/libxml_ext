@@ -1,6 +1,7 @@
 require "xml"
 
 lib LibXML
+  fun xmlNewText(content : UInt8*) : Node*
   fun xmlAddChild(parent : Node*, child : Node*) : Node*
   fun xmlReplaceNode(node : Node*, other : Node*) : Node*
   fun xmlAddNextSibling(node : Node*, other : Node*) : Node*
@@ -8,6 +9,11 @@ lib LibXML
 end
 
 struct XML::Node
+  # Creates a new text node.
+  def initialize(text : String)
+    @node = LibXML.xmlNewText(text)
+  end
+
   # Adds a child node to this node, after existing children, merging
   # adjacent text nodes. Returns the child node.
   def add_child(child : Node)

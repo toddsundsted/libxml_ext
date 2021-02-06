@@ -25,4 +25,9 @@ Spectator.describe "LibXML2 extensions" do
     parent.add_child(child).add_sibling(other, position: :before)
     expect(parent.xpath_node("/parent/child/preceding-sibling::other")).to eq(other)
   end
+
+  it "creates a text node" do
+    parent.add_child(XML::Node.new("foobar"))
+    expect(parent.xpath_node("/parent/text()").try(&.text)).to eq("foobar")
+  end
 end
