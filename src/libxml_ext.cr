@@ -1,3 +1,5 @@
+require "xml"
+
 lib LibXML
   fun xmlAddChild(parent : Node*, child : Node*) : Node*
 end
