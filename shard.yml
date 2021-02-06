@@ -1,0 +1,12 @@
+name: libxml_ext
+version: 0.1.0
+
+description: |
+  Extensions to XML in Crystal.
+
+authors:
+  - Todd Sundsted
+
+crystal: 0.35.1
+
+license: MIT
