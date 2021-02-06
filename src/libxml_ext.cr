@@ -6,6 +6,8 @@ lib LibXML
   fun xmlReplaceNode(node : Node*, other : Node*) : Node*
   fun xmlAddNextSibling(node : Node*, other : Node*) : Node*
   fun xmlAddPrevSibling(node : Node*, other : Node*) : Node*
+  fun xmlCopyNode(node : Node*, extended : Int) : Node*
+  fun xmlCopyDoc(node : Doc*, recursive : Int) : Doc*
 end
 
 struct XML::Node
@@ -43,5 +45,14 @@ struct XML::Node
       raise NotImplementedError.new("position: #{position}")
     end
     other
+  end
+
+  # Performs a deep copy on this node.
+  def clone
+    self.class.new(LibXML.xmlCopyNode(self, 1)).tap do |clone|
+      self.class.new(LibXML.xmlCopyDoc(@node.value.doc, 0)).tap do |document|
+        document.add_child(clone)
+      end
+    end
   end
 end

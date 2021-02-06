@@ -30,4 +30,10 @@ Spectator.describe "LibXML2 extensions" do
     parent.add_child(XML::Node.new("foobar"))
     expect(parent.xpath_node("/parent/text()").try(&.text)).to eq("foobar")
   end
+
+  it "clones the node" do
+    parent.add_child(child).add_child(XML::Node.new("foobar"))
+    expect(child.clone.xpath_node("/child/text()").try(&.text)).to eq("foobar")
+    expect(child.clone).not_to eq(child)
+  end
 end
