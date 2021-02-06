@@ -9,4 +9,8 @@ authors:
 
 crystal: 0.35.1
 
+development_dependencies:
+  spectator:
+    gitlab: arctic-fox/spectator
+
 license: MIT
