@@ -1,7 +1,7 @@
 # libxml_ext
 
 [![GitHub Release](https://img.shields.io/github/release/toddsundsted/libxml_ext.svg)](https://github.com/toddsundsted/libxml_ext/releases)
-[![Build Status](https://travis-ci.org/toddsundsted/libxml_ext.svg?branch=main)](https://travis-ci.org/toddsundsted/libxml_ext)
+[![Build Status](https://github.com/toddsundsted/libxml_ext/actions/workflows/ci.yml/badge.svg)](https://github.com/toddsundsted/libxml_ext/actions)
 [![Documentation](https://img.shields.io/badge/docs-available-brightgreen.svg)](https://toddsundsted.github.io/libxml_ext/)
 
 Extensions to XML in Crystal.
