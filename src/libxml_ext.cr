@@ -2,9 +2,11 @@ require "xml"
 
 {% if compare_versions(Crystal::VERSION, "1.17.0") < 0 %}
   {% raise "libxml_ext requires Crystal >= 1.17.0" %}
-{% elsif compare_versions(Crystal::VERSION, "1.18.0") < 0 %}
-  # Patch XML::NodeSet to fix pointer access issue in core library:
-  # https://github.com/crystal-lang/crystal/pull/16055
+{% end %}
+
+# Patch XML::NodeSet to fix pointer access issue in core library:
+# https://github.com/crystal-lang/crystal/pull/16055
+{% if compare_versions(Crystal::VERSION, "1.18.0") < 0 %}
   struct XML::NodeSet
     def self.new(doc : Node, set : LibXML::NodeSet*)
       return NodeSet.new unless set && set.value.node_nr > 0
@@ -16,9 +18,10 @@ require "xml"
     end
   end
 {% end %}
+
+# Patch XML parse methods to fix parser context memory leak:
+# https://github.com/crystal-lang/crystal/pull/16414
 {% if compare_versions(Crystal::VERSION, "1.19.0") < 0 %}
-  # Patch XML parse methods to fix parser context memory leak:
-  # https://github.com/crystal-lang/crystal/pull/16406
   lib LibXML
     fun xmlFreeParserCtxt(ctxt : ParserCtxt)
     fun htmlFreeParserCtxt(ctxt : HTMLParserCtxt)
@@ -79,53 +82,105 @@ lib LibXML
   fun xmlReplaceNode(node : Node*, other : Node*) : Node*
   fun xmlAddNextSibling(node : Node*, other : Node*) : Node*
   fun xmlAddPrevSibling(node : Node*, other : Node*) : Node*
-  fun xmlCopyNode(node : Node*, extended : Int) : Node*
-  fun xmlCopyDoc(node : Doc*, recursive : Int) : Doc*
+  fun xmlNewDoc(version : UInt8*) : Doc*
 end
 
 class XML::Node
-  # Creates a new text node.
-  def initialize(text : String)
-    @node = LibXML.xmlNewText(text)
+  # Returns a new text node.
+  #
+  def self.new(text : String)
+    raise ArgumentError.new("cannot include null byte") if text.includes?('\0')
+    doc = LibXML.xmlNewDoc(nil)
+    document = Document.new(doc)
+    text = LibXML.xmlNewText(text)
+    node = new(text, document)
+    LibXML.xmlAddChild(document, node)
+    node
   end
 
-  # Adds a child node to this node, after existing children, merging
-  # adjacent text nodes. Returns the child node.
+  # Recursively moves nodes.
+  #
+  # Enforces the following rules (from the library documentation):
+  #
+  #   ...when a libxml node is moved to another document, then the
+  #   @document reference of its XML::Node and any instantiated
+  #   descendant must be updated to point to the new document Node.
+  #
+  #   ...the libxml node, along with any descendant shall be removed
+  #   from the unlinked nodes list when relinked into a tree, be it
+  #   the same document or another.
+  #
+  #   ...when a XML::Node is moved to another document, the XML::Node
+  #   and any instantiated descendant XML::Node shall be cleaned from
+  #   the original document's cache, and must be added to the new
+  #   document's cache.
+  #
+  private def move_nodes(node_p : Pointer(LibXML::Node), from : Document, to : Document)
+    if (ref = from.cache.delete(node_p))
+      to.cache[node_p] = ref
+      if (node = ref.value)
+        node.document = to
+      end
+    end
+    from.unlinked_nodes.delete(node_p)
+    node_p = node_p.value.children
+    while node_p
+      move_nodes(node_p, from, to)
+      node_p = node_p.value.next
+    end
+  end
+
+  protected setter document
+
+  # Adds a child node to this node after any existing children.
+  #
+  # Does not support adding text nodes because `xmlAddChild` merges
+  # adjacent text nodes automatically, and this method does not
+  # accommodate that yet. The restriction on "non-element" nodes is
+  # overly broad.
+  #
+  # Returns the child node.
+  #
   def add_child(child : Node)
-    LibXML.xmlUnlinkNode(child)
+    raise ArgumentError.new("cannot add non-element node") unless child.element?
+    child.unlink
     LibXML.xmlAddChild(self, child)
+    move_nodes(child.@node, child.document, self.document)
     child
   end
 
-  # Replaces this node with the other node. Returns the other node.
+  # Replaces this node with the other node.
+  #
+  # Returns the other node.
+  #
   def replace_with(other : Node)
-    LibXML.xmlUnlinkNode(other)
+    other.unlink
     LibXML.xmlReplaceNode(self, other)
+    self.document.unlinked_nodes.add(self.@node)
+    move_nodes(other.@node, other.document, self.document)
     other
   end
 
-  # Adds a sibling before or after this node. By default, it adds the
-  # sibling after this node. Returns the sibling node.
-  def add_sibling(other : Node, position = :after)
+  enum Position
+    After
+    Before
+  end
+
+  # Adds a sibling before or after this node.
+  #
+  # By default, it adds the sibling after this node.
+  #
+  # Returns the sibling node.
+  #
+  def add_sibling(sibling : Node, position : Position = Position::After)
+    sibling.unlink
     case position
-    when :after
-      LibXML.xmlUnlinkNode(other)
-      LibXML.xmlAddNextSibling(self, other)
-    when :before
-      LibXML.xmlUnlinkNode(other)
-      LibXML.xmlAddPrevSibling(self, other)
-    else
-      raise NotImplementedError.new("position: #{position}")
+    in Position::After
+      LibXML.xmlAddNextSibling(self, sibling)
+    in Position::Before
+      LibXML.xmlAddPrevSibling(self, sibling)
     end
-    other
-  end
-
-  # Performs a deep copy on this node.
-  def clone
-    self.class.new(LibXML.xmlCopyNode(self, 1)).tap do |clone|
-      self.class.new(LibXML.xmlCopyDoc(@node.value.doc, 0)).tap do |document|
-        document.add_child(clone)
-      end
-    end
+    move_nodes(sibling.@node, sibling.document, self.document)
+    sibling
   end
 end
