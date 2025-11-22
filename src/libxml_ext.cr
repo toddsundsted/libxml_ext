@@ -2,6 +2,19 @@ require "xml"
 
 {% if compare_versions(Crystal::VERSION, "1.17.0") < 0 %}
   {% raise "libxml_ext requires Crystal >= 1.17.0" %}
+{% elsif compare_versions(Crystal::VERSION, "1.18.0") < 0 %}
+  # Patch XML::NodeSet to fix pointer access issue in core library:
+  # https://github.com/crystal-lang/crystal/pull/16055
+  struct XML::NodeSet
+    def self.new(doc : Node, set : LibXML::NodeSet*)
+      return NodeSet.new unless set && set.value.node_nr > 0
+
+      nodes = Slice(Node).new(set.value.node_nr) do |i|
+        Node.new(set.value.node_tab[i], doc)
+      end
+      NodeSet.new(nodes)
+    end
+  end
 {% end %}
 
 lib LibXML
