@@ -4,77 +4,10 @@ require "xml"
   {% raise "libxml_ext requires Crystal >= 1.17.0" %}
 {% end %}
 
-# Patch XML::NodeSet to fix pointer access issue in core library:
-# https://github.com/crystal-lang/crystal/pull/16055
-{% if compare_versions(Crystal::VERSION, "1.18.0") < 0 %}
-  struct XML::NodeSet
-    def self.new(doc : Node, set : LibXML::NodeSet*)
-      return NodeSet.new unless set && set.value.node_nr > 0
-
-      nodes = Slice(Node).new(set.value.node_nr) do |i|
-        Node.new(set.value.node_tab[i], doc)
-      end
-      NodeSet.new(nodes)
-    end
-  end
-{% end %}
-
-# Patch XML parse methods to fix parser context memory leak:
-# https://github.com/crystal-lang/crystal/pull/16414
-{% if compare_versions(Crystal::VERSION, "1.19.0") < 0 %}
-  lib LibXML
-    fun xmlFreeParserCtxt(ctxt : ParserCtxt)
-    fun htmlFreeParserCtxt(ctxt : HTMLParserCtxt)
-  end
-
-  module XML
-    def self.parse(string : String, options : ParserOptions = ParserOptions.default) : Document
-      raise XML::Error.new("Document is empty", 0) if string.empty?
-      ctxt = LibXML.xmlNewParserCtxt
-      begin
-        from_ptr(ctxt) do
-          LibXML.xmlCtxtReadMemory(ctxt, string, string.bytesize, nil, nil, options)
-        end
-      ensure
-        LibXML.xmlFreeParserCtxt(ctxt)
-      end
-    end
-
-    def self.parse(io : IO, options : ParserOptions = ParserOptions.default) : Document
-      ctxt = LibXML.xmlNewParserCtxt
-      begin
-        from_ptr(ctxt) do
-          LibXML.xmlCtxtReadIO(ctxt, ->read_callback, ->close_callback, Box(IO).box(io), nil, nil, options)
-        end
-      ensure
-        LibXML.xmlFreeParserCtxt(ctxt)
-      end
-    end
-
-    def self.parse_html(string : String, options : HTMLParserOptions = HTMLParserOptions.default) : Document
-      raise XML::Error.new("Document is empty", 0) if string.empty?
-      ctxt = LibXML.htmlNewParserCtxt
-      begin
-        from_ptr(ctxt) do
-          LibXML.htmlCtxtReadMemory(ctxt, string, string.bytesize, nil, "utf-8", options)
-        end
-      ensure
-        LibXML.htmlFreeParserCtxt(ctxt)
-      end
-    end
-
-    def self.parse_html(io : IO, options : HTMLParserOptions = HTMLParserOptions.default) : Document
-      ctxt = LibXML.htmlNewParserCtxt
-      begin
-        from_ptr(ctxt) do
-          LibXML.htmlCtxtReadIO(ctxt, ->read_callback, ->close_callback, Box(IO).box(io), nil, "utf-8", options)
-        end
-      ensure
-        LibXML.htmlFreeParserCtxt(ctxt)
-      end
-    end
-  end
-{% end %}
+require "./patch/01_fix_pointer_issue"
+require "./patch/02_fix_parser_context_leak"
+require "./patch/03_fix_comparison_in_finalizer"
+require "./patch/04_fix_iteration_bug"
 
 lib LibXML
   fun xmlNewText(content : UInt8*) : Node*
