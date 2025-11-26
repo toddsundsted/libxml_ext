@@ -43,11 +43,6 @@ Spectator.describe "LibXML2 extensions" do
   context "adding a child node" do
     let(parent) { XML.parse("<parent/>").first_element_child.not_nil! }
     let(node) { XML.parse("<node/>").first_element_child.not_nil! }
-    let(text) { XML::Node.new("text") }
-
-    it "rejects non-element node" do
-      expect { parent.add_child(text) }.to raise_error(ArgumentError, /non-element node/)
-    end
 
     def operation
       parent.add_child(node)
@@ -142,6 +137,38 @@ Spectator.describe "LibXML2 extensions" do
 
       post_condition do
         expect(other_doc.unlinked_nodes).not_to have(node.node)
+      end
+    end
+
+    context "given a text node" do
+      let(text) { XML::Node.new("text") }
+
+      def operation
+        parent.add_child(text)
+      end
+
+      it "adds the text node to the parent" do
+        expect { operation }.to change { parent.xpath_node("/parent/text()") }.from(nil).to(text)
+      end
+
+      it "changes the text node's document" do
+        expect { operation }.to change { text.document }.from(text.document).to(parent.document)
+      end
+
+      let!(text_doc) { text.document }
+      let!(parent_doc) { parent.document }
+
+      it "removes the text node from the text node document's cache" do
+        expect { operation }.to change { text_doc.cache.has_key?(text.node) }.from(true).to(false)
+      end
+
+      it "adds the text node to the parent document's cache" do
+        expect { operation }.to change { parent_doc.cache.has_key?(text.node) }.from(false).to(true)
+      end
+
+      post_condition do
+        expect(text_doc.unlinked_nodes).not_to have(text.node)
+        expect(parent_doc.unlinked_nodes).not_to have(text.node)
       end
     end
   end

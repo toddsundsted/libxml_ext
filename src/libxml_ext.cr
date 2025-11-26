@@ -65,20 +65,70 @@ class XML::Node
 
   protected setter document
 
-  # Adds a child node to this node after any existing children.
+  # ## Text Node Implementation Note ##
   #
-  # Does not support adding text nodes because `xmlAddChild` merges
-  # adjacent text nodes automatically, and this method does not
-  # accommodate that yet. The restriction on "non-element" nodes is
-  # overly broad.
+  # libxml2 has inconsistent text node merging behavior. Generally,
+  # when libxml2 functions (e.g. `xmlAddChild`, `xmlAddNextSibling`,
+  # `xmlAddPrevSibling`) add a text node adjacent to another text
+  # node, libxml2:
+  #
+  # 1. Merges the text content into the adjacent node
+  # 2. Frees the "added" node's memory
+  # 3. Returns a pointer to the merged node
+  #
+  # ### Important Exceptions ###
+  #
+  # - `element.add_sibling(text_node)` and `element.add_child(text_node)`:
+  #   When the **reference node** (the node calling the method) is an
+  #   element, adding a text node does not trigger merging even if an
+  #   **adjacent node** is a text node. The **reference node** must be
+  #   a text node to trigger merging.
+  #
+  # - `xmlReplaceNode(old, text_node)`: Never merges, even when replacing
+  #   an element between two adjacent text nodes.
+  #
+  # This behavior is **context-dependent** and **poorly documented**.
+  # The same function can either merge or not merge depending on the
+  # function called and type of the adjacent node. This makes it difficult
+  # to write safe library code without defensive measures.
+  #
+  # ### Placeholder Elements ###
+  #
+  # To normalize this, we use temporary placeholder elements when
+  # adding text nodes:
+  #
+  # 1. Create a temporary placeholder element (`<__libxml_ext_placeholder__/>`)
+  # 2. Add the placeholder using libxml2 functions
+  # 3. Replace the placeholder with the text node using `xmlReplaceNode()`
+  #
+  # Neither step 2 nor step 3 trigger text node merging.
+  #
+  # ### Methods Using This Technique
+  #
+  # - `add_child(text_node)`
+  # - `add_sibling(text_node)`
+
+  # Creates a placeholder element.
+  #
+  private def create_placeholder_element : Node
+    placeholder_doc = XML.parse("<__libxml_ext_placeholder__/>")
+    placeholder_doc.first_element_child.not_nil!
+  end
+
+  # Adds a child node to this node after any existing children.
   #
   # Returns the child node.
   #
   def add_child(child : Node)
-    raise ArgumentError.new("cannot add non-element node") unless child.element?
-    child.unlink
-    LibXML.xmlAddChild(self, child)
-    move_nodes(child.@node, child.document, self.document)
+    if child.text?
+      placeholder = create_placeholder_element
+      add_child(placeholder)
+      placeholder.replace_with(child)
+    else
+      child.unlink
+      LibXML.xmlAddChild(self, child)
+      move_nodes(child.@node, child.document, self.document)
+    end
     child
   end
 
@@ -106,14 +156,20 @@ class XML::Node
   # Returns the sibling node.
   #
   def add_sibling(sibling : Node, position : Position = Position::After)
-    sibling.unlink
-    case position
-    in Position::After
-      LibXML.xmlAddNextSibling(self, sibling)
-    in Position::Before
-      LibXML.xmlAddPrevSibling(self, sibling)
+    if sibling.text?
+      placeholder = create_placeholder_element
+      add_sibling(placeholder, position)
+      placeholder.replace_with(sibling)
+    else
+      sibling.unlink
+      case position
+      in Position::After
+        LibXML.xmlAddNextSibling(self, sibling)
+      in Position::Before
+        LibXML.xmlAddPrevSibling(self, sibling)
+      end
+      move_nodes(sibling.@node, sibling.document, self.document)
     end
-    move_nodes(sibling.@node, sibling.document, self.document)
     sibling
   end
 end
