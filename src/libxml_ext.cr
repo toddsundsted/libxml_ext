@@ -1,7 +1,7 @@
 require "xml"
 
-{% if compare_versions(Crystal::VERSION, "1.17.0") < 0 %}
-  {% raise "libxml_ext requires Crystal >= 1.17.0" %}
+{% if compare_versions(Crystal::VERSION, "1.19.1") < 0 %}
+  {% raise "libxml_ext requires Crystal >= 1.19.1" %}
 {% end %}
 
 require "./patch/01_fix_pointer_issue"
