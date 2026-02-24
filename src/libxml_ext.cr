@@ -4,11 +4,6 @@ require "xml"
   {% raise "libxml_ext requires Crystal >= 1.19.1" %}
 {% end %}
 
-require "./patch/01_fix_pointer_issue"
-require "./patch/02_fix_parser_context_leak"
-require "./patch/03_fix_comparison_in_finalizer"
-require "./patch/04_fix_iteration_bug"
-
 lib LibXML
   fun xmlNewText(content : UInt8*) : Node*
   fun xmlAddChild(parent : Node*, child : Node*) : Node*
