@@ -11,6 +11,7 @@ lib LibXML
   fun xmlAddNextSibling(node : Node*, other : Node*) : Node*
   fun xmlAddPrevSibling(node : Node*, other : Node*) : Node*
   fun xmlNewDoc(version : UInt8*) : Doc*
+  fun xmlMemFree(mem : Void*)
   fun xmlDOMWrapAdoptNode(
     ctxt : Void*,
     sourceDoc : Doc*,
@@ -21,7 +22,54 @@ lib LibXML
   ) : Int32
 end
 
+class XML::Attributes
+  # PATCH
+  # Patch `XML::Attributes#delete` to fix memory leak when deleting attributes with content.
+  # See: https://github.com/crystal-lang/crystal/issues/16685
+  #
+  def delete(name : String) : String?
+    prop = find_prop(name)
+    return unless prop
+
+    value = ""
+    if content = LibXML.xmlNodeGetContent(prop)
+      begin
+        value = String.new(content)
+      ensure
+        LibXML.xmlMemFree(content.as(Void*))
+      end
+    end
+
+    if node = @node.document.cached?(prop)
+      # can't call xmlUnsetProp: it would free the node
+      node.unlink
+      value
+    else
+      # manually unlink the prop's children if we have live references, so
+      # xmlUnsetProp won't free them immediately
+      @node.document.unlink_cached_children(prop)
+      value if LibXML.xmlUnsetProp(@node, name) == 0
+    end
+  end
+end
+
 class XML::Node
+  # PATCH
+  # Patch `XML::Node#content` to fix memory leak when getting content of nodes.
+  # See: https://github.com/crystal-lang/crystal/issues/16685
+  #
+  def content : String
+    if ptr = LibXML.xmlNodeGetContent(self)
+      begin
+        String.new(ptr)
+      ensure
+        LibXML.xmlMemFree(ptr.as(Void*))
+      end
+    else
+      ""
+    end
+  end
+
   # Returns a new text node.
   #
   def self.new(text : String)
