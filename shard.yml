@@ -1,5 +1,5 @@
 name: libxml_ext
-version: 0.1.2
+version: 0.2.0
 
 description: |
   Extensions to XML in Crystal.
@@ -7,7 +7,7 @@ description: |
 authors:
   - Todd Sundsted
 
-crystal: ">= 0.35.1, < 2.0.0"
+crystal: ">= 1.19.1"
 
 development_dependencies:
   spectator:
