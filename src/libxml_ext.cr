@@ -11,6 +11,14 @@ lib LibXML
   fun xmlAddNextSibling(node : Node*, other : Node*) : Node*
   fun xmlAddPrevSibling(node : Node*, other : Node*) : Node*
   fun xmlNewDoc(version : UInt8*) : Doc*
+  fun xmlDOMWrapAdoptNode(
+    ctxt : Void*,
+    sourceDoc : Doc*,
+    node : Node*,
+    destDoc : Doc*,
+    destParent : Node*,
+    options : Int32
+  ) : Int32
 end
 
 class XML::Node
@@ -24,6 +32,17 @@ class XML::Node
     node = new(text, document)
     LibXML.xmlAddChild(document, node)
     node
+  end
+
+  # Adopts a node when crossing document boundaries.
+  #
+  private def adopt_node(node : Node, from : Document, to : Document)
+    if from.@node != to.@node
+      result = LibXML.xmlDOMWrapAdoptNode(nil, from.@node.as(LibXML::Doc*), node, to.@node.as(LibXML::Doc*), nil, 0)
+      if result != 0
+        raise XML::Error.new("xmlDOMWrapAdoptNode failed with code #{result}", 0)
+      end
+    end
   end
 
   # Recursively moves nodes.
@@ -43,6 +62,11 @@ class XML::Node
   #   the original document's cache, and must be added to the new
   #   document's cache.
   #
+  private def move_nodes(node : Node, from : Document, to : Document)
+    move_nodes(node.@node, from, to)
+  end
+
+  # :ditto:
   private def move_nodes(node_p : Pointer(LibXML::Node), from : Document, to : Document)
     if (ref = from.cache.delete(node_p))
       to.cache[node_p] = ref
@@ -120,9 +144,15 @@ class XML::Node
       add_child(placeholder)
       placeholder.replace_with(child)
     else
+      from_doc = child.document
+      to_doc = self.document
       child.unlink
-      LibXML.xmlAddChild(self, child)
-      move_nodes(child.@node, child.document, self.document)
+      adopt_node(child, from_doc, to_doc)
+      if LibXML.xmlAddChild(self, child)
+        move_nodes(child, from_doc, to_doc)
+      else
+        raise XML::Error.new("xmlAddChild failed", 0)
+      end
     end
     child
   end
@@ -132,10 +162,16 @@ class XML::Node
   # Returns the other node.
   #
   def replace_with(other : Node)
+    from_doc = other.document
+    to_doc = self.document
     other.unlink
-    LibXML.xmlReplaceNode(self, other)
-    self.document.unlinked_nodes.add(self.@node)
-    move_nodes(other.@node, other.document, self.document)
+    adopt_node(other, from_doc, to_doc)
+    if LibXML.xmlReplaceNode(self, other)
+      self.document.unlinked_nodes.add(self.@node)
+      move_nodes(other, from_doc, to_doc)
+    else
+      raise XML::Error.new("xmlReplaceNode failed", 0)
+    end
     other
   end
 
@@ -156,14 +192,21 @@ class XML::Node
       add_sibling(placeholder, position)
       placeholder.replace_with(sibling)
     else
+      from_doc = sibling.document
+      to_doc = self.document
       sibling.unlink
+      adopt_node(sibling, from_doc, to_doc)
       case position
       in Position::After
-        LibXML.xmlAddNextSibling(self, sibling)
+        unless LibXML.xmlAddNextSibling(self, sibling)
+          raise XML::Error.new("xmlAddNextSibling failed", 0)
+        end
       in Position::Before
-        LibXML.xmlAddPrevSibling(self, sibling)
+        unless LibXML.xmlAddPrevSibling(self, sibling)
+          raise XML::Error.new("xmlAddPrevSibling failed", 0)
+        end
       end
-      move_nodes(sibling.@node, sibling.document, self.document)
+      move_nodes(sibling, from_doc, to_doc)
     end
     sibling
   end

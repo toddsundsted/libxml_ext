@@ -321,4 +321,36 @@ Spectator.describe "LibXML2 extensions" do
       end
     end
   end
+
+  # Regression test for libxml2 v2.9.13 dictionary string bug.
+  #
+  # Produces the crash that results from moving nodes between
+  # documents when temporary documents with dictionaries are
+  # finalized.
+  #
+  it "does not crash when documents are finalized" do
+    10.times do
+      doc = XML.parse("<div>original text</div>")
+      text = doc.xpath_node("//text()").not_nil!
+
+      span = XML.parse("<span/>").first_element_child.not_nil!
+      text.replace_with(span)
+
+      span.add_sibling(XML::Node.new("new text"))
+      span.unlink
+    end
+
+    # Force GC in order to finalize temporary documents (placeholder
+    # docs, text node docs). Without the fix, this causes placeholder
+    # doc to free dictionary strings that are still referenced by
+    # nodes in the main document.
+    GC.collect
+
+    # Force GC again in order to finalize main documents. Without the
+    # fix, this crashes when trying to free already-freed strings.
+    GC.collect
+
+    # If we get here, the test passed.
+    expect(true).to be_true
+  end
 end
