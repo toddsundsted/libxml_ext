@@ -11,7 +11,6 @@ lib LibXML
   fun xmlAddNextSibling(node : Node*, other : Node*) : Node*
   fun xmlAddPrevSibling(node : Node*, other : Node*) : Node*
   fun xmlNewDoc(version : UInt8*) : Doc*
-  fun xmlMemFree(mem : Void*)
   fun xmlDOMWrapAdoptNode(
     ctxt : Void*,
     sourceDoc : Doc*,
@@ -20,6 +19,7 @@ lib LibXML
     destParent : Node*,
     options : Int32
   ) : Int32
+  $xmlFree : (Void* -> Void)
 end
 
 class XML::Attributes
@@ -36,7 +36,7 @@ class XML::Attributes
       begin
         value = String.new(content)
       ensure
-        LibXML.xmlMemFree(content.as(Void*))
+        LibXML.xmlFree.call(content.as(Void*))
       end
     end
 
@@ -63,7 +63,7 @@ class XML::Node
       begin
         String.new(ptr)
       ensure
-        LibXML.xmlMemFree(ptr.as(Void*))
+        LibXML.xmlFree.call(ptr.as(Void*))
       end
     else
       ""
