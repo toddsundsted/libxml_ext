@@ -6,6 +6,7 @@ require "xml"
 
 lib LibXML
   fun xmlNewText(content : UInt8*) : Node*
+  fun xmlNewDocText(doc : Doc*, content : UInt8*) : Node*
   fun xmlAddChild(parent : Node*, child : Node*) : Node*
   fun xmlReplaceNode(node : Node*, other : Node*) : Node*
   fun xmlAddNextSibling(node : Node*, other : Node*) : Node*
@@ -69,7 +70,29 @@ class XML::Node
       ""
     end
   end
+end
 
+class XML::Document < XML::Node
+  # Creates a text node owned by this document.
+  #
+  # The node is created unlinked and must be inserted into the tree.
+  #
+  # Raises `ArgumentError` if content contains null byte.
+  # Raises `XML::Error` if libxml2 fails to allocate the node.
+  #
+  def create_text_node(content : String) : Node
+    raise ArgumentError.new("cannot include null byte") if content.includes?('\0')
+
+    unless (text_ptr = LibXML.xmlNewDocText(self.@node.as(LibXML::Doc*), content))
+      raise XML::Error.new("failed to allocate XML text node", 0)
+    end
+    node = Node.new(text_ptr, self)
+    cache[text_ptr] = WeakRef.new(node)
+    node
+  end
+end
+
+class XML::Node
   # Returns a new text node.
   #
   def self.new(text : String)

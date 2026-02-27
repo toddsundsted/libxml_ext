@@ -40,6 +40,48 @@ Spectator.describe "LibXML2 extensions" do
     end
   end
 
+  context "creating a text node" do
+    let(doc) { XML.parse("<root/>") }
+
+    it "rejects text with null byte" do
+      expect { doc.create_text_node("foo\0bar") }.to raise_error(ArgumentError, /null byte/)
+    end
+
+    context "with valid text" do
+      subject { doc.create_text_node("foo bar") }
+
+      it "is a text node" do
+        expect(subject.type).to eq(XML::Node::Type::TEXT_NODE)
+      end
+
+      it "has the text" do
+        expect(subject.text).to eq("foo bar")
+      end
+
+      it "sets its document" do
+        expect(subject.document).to eq(doc)
+      end
+
+      it "adds itself to the document's cache" do
+        expect(doc.cache).to have_key(subject.node)
+      end
+
+      let(root) { doc.first_element_child.not_nil! }
+
+      it "is not a child of the document" do
+        expect(root.children).not_to contain(subject)
+      end
+
+      context "after insertion" do
+        before_each { root.add_child(subject) }
+
+        it "is a child of the document" do
+          expect(root.children).to contain_exactly(subject)
+        end
+      end
+    end
+  end
+
   context "adding a child node" do
     let(parent) { XML.parse("<parent/>").first_element_child.not_nil! }
     let(node) { XML.parse("<node/>").first_element_child.not_nil! }
