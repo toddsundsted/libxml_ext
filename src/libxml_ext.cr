@@ -205,14 +205,14 @@ class XML::Node
     placeholder_doc.first_element_child.not_nil!
   end
 
-  # Adds a child node to this node after any existing children.
+  # Adds a child node at the end of this node's children.
   #
   # Returns the child node.
   #
-  def add_child(child : Node)
+  def append(child : Node) : Node
     if child.text?
       placeholder = create_placeholder_element
-      add_child(placeholder)
+      append(placeholder)
       placeholder.replace_with(child)
     else
       from_doc = child.document
@@ -224,6 +224,42 @@ class XML::Node
       else
         raise XML::Error.new("xmlAddChild failed", 0)
       end
+    end
+    child
+  end
+
+  # Adds a child node to this node after any existing children.
+  #
+  # Returns the child node.
+  #
+  def add_child(child : Node)
+    append(child)
+  end
+
+  # Adds a child node at the beginning of this node's children.
+  #
+  # Returns the child node.
+  #
+  def prepend(child : Node) : Node
+    if child.text?
+      placeholder = create_placeholder_element
+      prepend(placeholder)
+      placeholder.replace_with(child)
+    else
+      from_doc = child.document
+      to_doc = self.document
+      child.unlink
+      adopt_node(child, from_doc, to_doc)
+      if first_child_ptr = self.@node.value.children
+        unless LibXML.xmlAddPrevSibling(first_child_ptr, child)
+          raise XML::Error.new("xmlAddPrevSibling failed", 0)
+        end
+      else
+        unless LibXML.xmlAddChild(self, child)
+          raise XML::Error.new("xmlAddChild failed", 0)
+        end
+      end
+      move_nodes(child, from_doc, to_doc)
     end
     child
   end
@@ -246,6 +282,50 @@ class XML::Node
     other
   end
 
+  # Adds a sibling node immediately after this node.
+  #
+  # Returns the sibling node.
+  #
+  def after(sibling : Node) : Node
+    if sibling.text?
+      placeholder = create_placeholder_element
+      after(placeholder)
+      placeholder.replace_with(sibling)
+    else
+      from_doc = sibling.document
+      to_doc = self.document
+      sibling.unlink
+      adopt_node(sibling, from_doc, to_doc)
+      unless LibXML.xmlAddNextSibling(self, sibling)
+        raise XML::Error.new("xmlAddNextSibling failed", 0)
+      end
+      move_nodes(sibling, from_doc, to_doc)
+    end
+    sibling
+  end
+
+  # Adds a sibling node immediately before this node.
+  #
+  # Returns the sibling node.
+  #
+  def before(sibling : Node) : Node
+    if sibling.text?
+      placeholder = create_placeholder_element
+      before(placeholder)
+      placeholder.replace_with(sibling)
+    else
+      from_doc = sibling.document
+      to_doc = self.document
+      sibling.unlink
+      adopt_node(sibling, from_doc, to_doc)
+      unless LibXML.xmlAddPrevSibling(self, sibling)
+        raise XML::Error.new("xmlAddPrevSibling failed", 0)
+      end
+      move_nodes(sibling, from_doc, to_doc)
+    end
+    sibling
+  end
+
   enum Position
     After
     Before
@@ -258,27 +338,11 @@ class XML::Node
   # Returns the sibling node.
   #
   def add_sibling(sibling : Node, position : Position = Position::After)
-    if sibling.text?
-      placeholder = create_placeholder_element
-      add_sibling(placeholder, position)
-      placeholder.replace_with(sibling)
-    else
-      from_doc = sibling.document
-      to_doc = self.document
-      sibling.unlink
-      adopt_node(sibling, from_doc, to_doc)
-      case position
-      in Position::After
-        unless LibXML.xmlAddNextSibling(self, sibling)
-          raise XML::Error.new("xmlAddNextSibling failed", 0)
-        end
-      in Position::Before
-        unless LibXML.xmlAddPrevSibling(self, sibling)
-          raise XML::Error.new("xmlAddPrevSibling failed", 0)
-        end
-      end
-      move_nodes(sibling, from_doc, to_doc)
+    case position
+    in Position::After
+      after(sibling)
+    in Position::Before
+      before(sibling)
     end
-    sibling
   end
 end
