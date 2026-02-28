@@ -93,19 +93,6 @@ class XML::Document < XML::Node
 end
 
 class XML::Node
-  # Returns a new text node.
-  #
-  @[Deprecated("Use XML::Document#create_text_node instead")]
-  def self.new(text : String)
-    raise ArgumentError.new("cannot include null byte") if text.includes?('\0')
-    doc = LibXML.xmlNewDoc(nil)
-    document = Document.new(doc)
-    text = LibXML.xmlNewText(text)
-    node = new(text, document)
-    LibXML.xmlAddChild(document, node)
-    node
-  end
-
   # Adopts a node when crossing document boundaries.
   #
   private def adopt_node(node : Node, from : Document, to : Document)
@@ -229,15 +216,6 @@ class XML::Node
     child
   end
 
-  # Adds a child node to this node after any existing children.
-  #
-  # Returns the child node.
-  #
-  @[Deprecated("Use append instead")]
-  def add_child(child : Node)
-    append(child)
-  end
-
   # Adds a child node at the beginning of this node's children.
   #
   # Returns the child node.
@@ -326,26 +304,5 @@ class XML::Node
       move_nodes(sibling, from_doc, to_doc)
     end
     sibling
-  end
-
-  enum Position
-    After
-    Before
-  end
-
-  # Adds a sibling before or after this node.
-  #
-  # By default, it adds the sibling after this node.
-  #
-  # Returns the sibling node.
-  #
-  @[Deprecated("Use after or before instead")]
-  def add_sibling(sibling : Node, position : Position = Position::After)
-    case position
-    in Position::After
-      after(sibling)
-    in Position::Before
-      before(sibling)
-    end
   end
 end
