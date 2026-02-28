@@ -1,5 +1,5 @@
 name: libxml_ext
-version: 0.2.0
+version: 0.3.0
 
 description: |
   Extensions to XML in Crystal.
