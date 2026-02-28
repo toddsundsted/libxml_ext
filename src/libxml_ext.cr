@@ -95,6 +95,7 @@ end
 class XML::Node
   # Returns a new text node.
   #
+  @[Deprecated("Use XML::Document#create_text_node instead")]
   def self.new(text : String)
     raise ArgumentError.new("cannot include null byte") if text.includes?('\0')
     doc = LibXML.xmlNewDoc(nil)
@@ -232,6 +233,7 @@ class XML::Node
   #
   # Returns the child node.
   #
+  @[Deprecated("Use append instead")]
   def add_child(child : Node)
     append(child)
   end
@@ -337,6 +339,7 @@ class XML::Node
   #
   # Returns the sibling node.
   #
+  @[Deprecated("Use after or before instead")]
   def add_sibling(sibling : Node, position : Position = Position::After)
     case position
     in Position::After
