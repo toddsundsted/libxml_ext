@@ -18,7 +18,7 @@ lib LibXML
     node : Node*,
     destDoc : Doc*,
     destParent : Node*,
-    options : Int32
+    options : Int32,
   ) : Int32
   $xmlFree : (Void* -> Void)
 end
